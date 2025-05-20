@@ -68,36 +68,36 @@ function abort() {
 </script>
 
 <template>
-  <form class="flex flex-col gap-2 w-[34rem]" @submit.prevent="createProject">
-    <span class="p-float-label">
+  <form class="flex flex-col gap-4 w-[34rem]" @submit.prevent="createProject">
+    <div class="flex items-center gap-4">
+      <label for="value" class="font-semibold w-1/3">
+      {{ t('newProjectForm.input.name') }}
+      </label>
       <InputText
-        id="value"
-        v-model="projectTitle"
-        type="text"
-        :class="{ 'p-invalid': errorMessage }"
-        aria-describedby="text-error"
+      id="value"
+      v-model="projectTitle"
+      type="text"
+      class="w-2/3"
+      :class="{ 'p-invalid': errorMessage }"
+      aria-describedby="text-error"
       />
-      <label for="value">{{ t('newProjectForm.input.name') }}</label>
-    </span>
-    <small id="text-error" class="p-error">
-      {{ errorMessage || '&nbsp;' }}
-    </small>
-    <div class="flex justify-end gap-2">
-    <Button
-    type="reset"
-    :label="t('button.cancel')"
-    icon="pi pi-times"
-    iconPos="left"
-    severity="secondary"
-    @click="abort"
-    />
-    <Button
-    type="submit"
-    :label="t('button.create')"
-    icon="pi pi-plus"
-    iconPos="left"
-    />
     </div>
 
+    <div class="flex justify-end gap-2">
+      <Button
+        type="reset"
+        :label="t('button.cancel')"
+        icon="pi pi-times"
+        iconPos="left"
+        severity="secondary"
+        @click="abort"
+      />
+      <Button
+        type="submit"
+        :label="t('button.create')"
+        icon="pi pi-plus"
+        iconPos="left"
+      />
+    </div>
   </form>
 </template>
