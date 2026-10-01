@@ -4,6 +4,7 @@ import { defineStore } from 'pinia';
 // route-level view components, which would otherwise stay in their own lazy chunks.
 import { userService, type UserJson } from '@/features/common/users/services/UserService';
 import i18n from '@/i18n/i18n';
+import { nativeGoogleAuthService } from '@/services/NativeGoogleAuth';
 
 export type User = UserJson;
 
@@ -34,37 +35,15 @@ export const useUserSessionStore = defineStore('user-session', {
       }
     },
 
-    async loginDev(): Promise<boolean> {
+    /**
+     * Exchanges a Google ID token (obtained natively) for a REMSFAL session.
+     * The backend verifies the token (signature, issuer, expiry, audience, verified email)
+     * and sets the session cookies (204 No Content).
+     */
+    async loginWithToken(idToken: string) {
       const params = new URLSearchParams();
-      params.append('app_id', 'dev');
-      params.append('app_token', 'dev');
-      params.append('dev_services', 'true');
-
-      try {
-        const response = await fetch('/api/v1/authentication/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          credentials: 'include',
-          body: params,
-        });
-
-        if (response.ok) {
-          console.log('Dev Login successful!');
-          await this.refreshSessionState();
-          return true;
-        } else {
-          console.error('Dev Login failed:', response.status, response.statusText);
-          return false;
-        }
-      } catch (error) {
-        console.error('Dev Login error:', error);
-        return false;
-      }
-    },
-
-    async loginWithToken(token: string) {
-      const params = new URLSearchParams();
-      params.append('token', token);
+      params.append('app_id', 'google');
+      params.append('app_token', idToken);
 
       try {
         const response = await fetch('/api/v1/authentication/token', {
@@ -82,6 +61,26 @@ export const useUserSessionStore = defineStore('user-session', {
       } catch (error: unknown) {
         console.error('Token-based login failed:', error);
         throw error;
+      }
+    },
+
+    /**
+     * Native Google login (Capacitor app): asks the operating system for a Google ID token
+     * and exchanges it at the backend. Returns true if a session was established.
+     */
+    async loginWithNativeGoogle(): Promise<boolean> {
+      const serverClientId = nativeGoogleAuthService.getServerClientId();
+      if (!serverClientId) {
+        console.error('Native Google login not configured: VITE_GOOGLE_WEB_CLIENT_ID is missing');
+        return false;
+      }
+      try {
+        const { idToken } = await nativeGoogleAuthService.signIn(serverClientId);
+        await this.loginWithToken(idToken);
+        return true;
+      } catch (error: unknown) {
+        console.error('Native Google login failed:', error);
+        return false;
       }
     },
   },

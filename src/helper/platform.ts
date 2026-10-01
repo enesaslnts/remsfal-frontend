@@ -15,10 +15,12 @@ export function isDevMode(): boolean {
 }
 
 /**
- * Check if the Dev Login should be shown
- * Returns true ONLY if running as native app (Capacitor)
- * Web always uses normal Google authentication
+ * Check if the native Google login should be used.
+ * Returns true ONLY if running as native app (Capacitor):
+ * the Google ID token is obtained from the operating system and exchanged
+ * at POST /api/v1/authentication/token.
+ * Web always uses the normal Google redirect authentication.
  */
-export function shouldShowDevLogin(): boolean {
+export function shouldUseNativeLogin(): boolean {
   return isNativePlatform();
 }

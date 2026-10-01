@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isNativePlatform, isDevMode, shouldShowDevLogin } from '@/helper/platform';
+import { isNativePlatform, isDevMode, shouldUseNativeLogin } from '@/helper/platform';
 
 describe('Platform Helper', () => {
   describe('isNativePlatform', () => {
@@ -28,22 +28,15 @@ describe('Platform Helper', () => {
     });
   });
 
-  describe('shouldShowDevLogin', () => {
+  describe('shouldUseNativeLogin', () => {
     it('should return false when on web platform (test environment)', () => {
-      // In test environment (web), Dev Login should not be shown
-      const result = shouldShowDevLogin();
+      // In test environment (web), the normal Google redirect login is used
+      const result = shouldUseNativeLogin();
       expect(result).toBe(false);
     });
 
-    it('should return a boolean value', () => {
-      const result = shouldShowDevLogin();
-      expect(typeof result).toBe('boolean');
-    });
-
     it('should only return true on native platforms', () => {
-      // Since we're in web/test environment, this should always be false
-      // This tests the function's behavior, not the implementation
-      const result = shouldShowDevLogin();
+      const result = shouldUseNativeLogin();
       expect(result).toBe(isNativePlatform());
     });
   });

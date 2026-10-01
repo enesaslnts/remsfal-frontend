@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useUserSessionStore, type User } from '@/stores/UserSession';
 import { apiClient } from '@/services/ApiClient';
+import { nativeGoogleAuthService } from '@/services/NativeGoogleAuth';
 
 
 describe('UserSession Store', () => {
@@ -101,79 +102,6 @@ describe('UserSession Store', () => {
     });
   });
 
-  describe('loginDev', () => {
-    it('should return true on successful login', async () => {
-      vi.mocked(globalThis.fetch).mockResolvedValue({
-        ok: true,
-        status: 200,
-      } as Response);
-
-      const result = await store.loginDev();
-
-      expect(result).toBe(true);
-      expect(globalThis.fetch).toHaveBeenCalledWith('/api/v1/authentication/token', expect.objectContaining({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        credentials: 'include',
-      }));
-    });
-
-    it('should send correct dev parameters in request body', async () => {
-      vi.mocked(globalThis.fetch).mockResolvedValue({
-        ok: true,
-        status: 200,
-      } as Response);
-
-      await store.loginDev();
-
-      const callArgs = vi.mocked(globalThis.fetch).mock.calls[0]!;
-      const body = callArgs[1]?.body as URLSearchParams;
-      expect(body.get('app_id')).toBe('dev');
-      expect(body.get('app_token')).toBe('dev');
-      expect(body.get('dev_services')).toBe('true');
-    });
-
-    it('should return false on failed login response', async () => {
-      vi.mocked(globalThis.fetch).mockResolvedValue({
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-      } as Response);
-
-      const result = await store.loginDev();
-
-      expect(result).toBe(false);
-    });
-
-    it('should return false on 403 forbidden', async () => {
-      vi.mocked(globalThis.fetch).mockResolvedValue({
-        ok: false,
-        status: 403,
-        statusText: 'Forbidden',
-      } as Response);
-
-      const result = await store.loginDev();
-
-      expect(result).toBe(false);
-    });
-
-    it('should return false on network error', async () => {
-      vi.mocked(globalThis.fetch).mockRejectedValue(new Error('Network error'));
-
-      const result = await store.loginDev();
-
-      expect(result).toBe(false);
-    });
-
-    it('should return false on connection timeout', async () => {
-      vi.mocked(globalThis.fetch).mockRejectedValue(new Error('Connection timeout'));
-
-      const result = await store.loginDev();
-
-      expect(result).toBe(false);
-    });
-  });
-
   describe('loginWithToken', () => {
     it('should call authentication endpoint with token', async () => {
       const testToken = 'test-jwt-token-12345';
@@ -192,7 +120,7 @@ describe('UserSession Store', () => {
       }));
     });
 
-    it('should include token in request body', async () => {
+    it('should send app_id=google and the ID token as app_token', async () => {
       const testToken = 'test-jwt-token-12345';
 
       vi.mocked(globalThis.fetch).mockResolvedValue({
@@ -204,7 +132,9 @@ describe('UserSession Store', () => {
 
       const callArgs = vi.mocked(globalThis.fetch).mock.calls[0]!;
       const body = callArgs[1]?.body as URLSearchParams;
-      expect(body.get('token')).toBe(testToken);
+      expect(body.get('app_id')).toBe('google');
+      expect(body.get('app_token')).toBe(testToken);
+      expect(body.get('token')).toBeNull();
     });
 
     it('should throw error on failed token login with status 401', async () => {
@@ -239,6 +169,56 @@ describe('UserSession Store', () => {
       vi.mocked(globalThis.fetch).mockRejectedValue(new Error('Connection refused'));
 
       await expect(store.loginWithToken('test-token')).rejects.toThrow('Connection refused');
+    });
+  });
+
+  describe('loginWithNativeGoogle', () => {
+    const CLIENT_ID = 'web-client-id.apps.googleusercontent.com';
+    let signIn: MockInstance<typeof nativeGoogleAuthService.signIn>;
+
+    beforeEach(() => {
+      vi.spyOn(nativeGoogleAuthService, 'getServerClientId').mockReturnValue(CLIENT_ID);
+      signIn = vi.spyOn(nativeGoogleAuthService, 'signIn');
+    });
+
+    it('should request the ID token for the server client id and exchange it', async () => {
+      signIn.mockResolvedValue({ idToken: 'native-id-token' });
+      vi.mocked(globalThis.fetch).mockResolvedValue({ ok: true, status: 204 } as Response);
+
+      const result = await store.loginWithNativeGoogle();
+
+      expect(result).toBe(true);
+      expect(signIn).toHaveBeenCalledWith(CLIENT_ID);
+      const body = vi.mocked(globalThis.fetch).mock.calls[0]![1]?.body as URLSearchParams;
+      expect(body.get('app_id')).toBe('google');
+      expect(body.get('app_token')).toBe('native-id-token');
+    });
+
+    it('should return false if the user cancels the native dialog', async () => {
+      signIn.mockRejectedValue(new Error('Sign-in cancelled'));
+
+      const result = await store.loginWithNativeGoogle();
+
+      expect(result).toBe(false);
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('should return false if the backend rejects the token', async () => {
+      signIn.mockResolvedValue({ idToken: 'foreign-token' });
+      vi.mocked(globalThis.fetch).mockResolvedValue({ ok: false, status: 401 } as Response);
+
+      const result = await store.loginWithNativeGoogle();
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false if no server client id is configured', async () => {
+      vi.mocked(nativeGoogleAuthService.getServerClientId).mockReturnValue('');
+
+      const result = await store.loginWithNativeGoogle();
+
+      expect(result).toBe(false);
+      expect(signIn).not.toHaveBeenCalled();
     });
   });
 });

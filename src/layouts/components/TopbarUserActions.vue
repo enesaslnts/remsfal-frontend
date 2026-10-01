@@ -8,8 +8,8 @@ const {
   onAccountSettingsClick,
   logout,
   login,
-  loginDev,
-  showDevLoginButton,
+  loginNative,
+  useNativeLogin,
 } = useTopbarUserActions();
 </script>
 
@@ -27,7 +27,7 @@ const {
     <span>{{ t('toolbar.logout') }}</span>
   </Button>
   <Button
-    v-if="sessionStore.user == null && !showDevLoginButton"
+    v-if="sessionStore.user == null && !useNativeLogin"
     class="layout-topbar-action"
     @click="login()"
   >
@@ -35,11 +35,11 @@ const {
     <span>{{ t('toolbar.login') }}</span>
   </Button>
   <Button
-    v-if="showDevLoginButton"
+    v-if="sessionStore.user == null && useNativeLogin"
     class="layout-topbar-action"
-    @click="loginDev()"
+    @click="loginNative()"
   >
-    <i class="pi pi-code" />
-    <span>{{ t('toolbar.devLogin') }}</span>
+    <i class="pi pi-google" />
+    <span>{{ t('toolbar.login') }}</span>
   </Button>
 </template>

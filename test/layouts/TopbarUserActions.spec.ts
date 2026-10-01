@@ -14,9 +14,9 @@ vi.mock('vue-router', () => ({
 }));
 
 
-// Mock platform helper to NOT show dev login by default, but allow overriding
-const platformMocks = vi.hoisted(() => ({shouldShowDevLogin: vi.fn(() => false),}));
-vi.mock('@/helper/platform', () => ({ shouldShowDevLogin: platformMocks.shouldShowDevLogin }));
+// Mock platform helper: web by default, can be switched to native per test
+const platformMocks = vi.hoisted(() => ({shouldUseNativeLogin: vi.fn(() => false),}));
+vi.mock('@/helper/platform', () => ({ shouldUseNativeLogin: platformMocks.shouldUseNativeLogin }));
 
 // Mock AccountDataView to prevent loading it (and its side effects/imports)
 vi.mock('@/features/common/users/views/AccountDataView.vue', () => ({ default: { template: '<div>Mocked View</div>' } }));
@@ -71,6 +71,37 @@ describe('TopbarUserActions.vue', () => {
     expect(accountButton).toBeDefined();
     expect(accountButton?.exists()).toBe(true);
     await accountButton?.trigger('click');
+  });
+
+  it('uses native Google login on native platforms', async () => {
+    platformMocks.shouldUseNativeLogin.mockReturnValue(true);
+    const { wrapper, store } = mountWrapper(null);
+    const nativeLogin = vi.spyOn(store, 'loginWithNativeGoogle').mockResolvedValue(true);
+    await flushPromises();
+
+    const loginButtons = wrapper.findAllComponents({ name: 'Button' }).filter(b => b.text().includes('Anmelden'));
+    expect(loginButtons).toHaveLength(1);
+
+    await loginButtons[0]!.trigger('click');
+    await flushPromises();
+
+    expect(nativeLogin).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith('/');
+    platformMocks.shouldUseNativeLogin.mockReturnValue(false);
+  });
+
+  it('does not navigate when native Google login fails', async () => {
+    platformMocks.shouldUseNativeLogin.mockReturnValue(true);
+    const { wrapper, store } = mountWrapper(null);
+    vi.spyOn(store, 'loginWithNativeGoogle').mockResolvedValue(false);
+    await flushPromises();
+
+    const loginButton = wrapper.findAllComponents({ name: 'Button' }).find(b => b.text().includes('Anmelden'));
+    await loginButton?.trigger('click');
+    await flushPromises();
+
+    expect(mockPush).not.toHaveBeenCalled();
+    platformMocks.shouldUseNativeLogin.mockReturnValue(false);
   });
 
   it('calls login when login button clicked', async () => {

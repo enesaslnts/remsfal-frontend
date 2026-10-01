@@ -2,7 +2,7 @@ import {computed} from 'vue';
 import {useRoute, useRouter} from 'vue-router';
 import {useI18n} from 'vue-i18n';
 import {useUserSessionStore} from '@/stores/UserSession';
-import {shouldShowDevLogin} from '@/helper/platform';
+import {shouldUseNativeLogin} from '@/helper/platform';
 
 export function useTopbarUserActions(): {
     t: ReturnType<typeof useI18n>['t'];
@@ -10,8 +10,8 @@ export function useTopbarUserActions(): {
     onAccountSettingsClick: () => void;
     logout: () => void;
     login: () => void;
-    loginDev: () => Promise<void>;
-    showDevLoginButton: import("vue").ComputedRef<boolean>;
+    loginNative: () => Promise<void>;
+    useNativeLogin: import("vue").ComputedRef<boolean>;
     } {
   const router = useRouter();
   const route = useRoute();
@@ -38,16 +38,15 @@ export function useTopbarUserActions(): {
     globalThis.location.href = `/api/v1/authentication/login?route=${encodeURIComponent(target)}`;
   };
 
-  const loginDev = async () => {
-    const success = await sessionStore.loginDev();
+  const loginNative = async () => {
+    const success = await sessionStore.loginWithNativeGoogle();
     if (success) {
-      router.push('/projects');
+      const redirect = route.query.redirect as string | undefined;
+      router.push(redirect || '/');
     }
   };
 
-  const showDevLoginButton = computed(() => {
-    return sessionStore.user == null && shouldShowDevLogin();
-  });
+  const useNativeLogin = computed(() => shouldUseNativeLogin());
 
   return {
     t,
@@ -55,7 +54,7 @@ export function useTopbarUserActions(): {
     onAccountSettingsClick,
     logout,
     login,
-    loginDev,
-    showDevLoginButton,
+    loginNative,
+    useNativeLogin,
   };
 }

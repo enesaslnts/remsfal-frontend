@@ -14,7 +14,7 @@ vi.mock('vue-router', () => ({
 }));
 
 // Mock platform helper (since TopbarUserActions uses it)
-vi.mock('../../src/helper/platform', () => ({ shouldShowDevLogin: vi.fn().mockReturnValue(false), }));
+vi.mock('../../src/helper/platform', () => ({ shouldUseNativeLogin: vi.fn().mockReturnValue(false), }));
 
 describe('ContractorTopbar.vue', () => {
   it('should render TopbarUserActions', async () => {
