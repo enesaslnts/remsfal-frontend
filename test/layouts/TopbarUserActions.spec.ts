@@ -18,6 +18,14 @@ vi.mock('vue-router', () => ({
 const platformMocks = vi.hoisted(() => ({shouldUseNativeLogin: vi.fn(() => false),}));
 vi.mock('@/helper/platform', () => ({ shouldUseNativeLogin: platformMocks.shouldUseNativeLogin }));
 
+// Mock app toast to verify error messages of the native login
+const toastMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
+  warn: vi.fn(),
+}));
+vi.mock('@/composables/useAppToast', () => ({ useAppToast: () => toastMocks }));
+
 // Mock AccountDataView to prevent loading it (and its side effects/imports)
 vi.mock('@/features/common/users/views/AccountDataView.vue', () => ({ default: { template: '<div>Mocked View</div>' } }));
 
@@ -76,7 +84,7 @@ describe('TopbarUserActions.vue', () => {
   it('uses native Google login on native platforms', async () => {
     platformMocks.shouldUseNativeLogin.mockReturnValue(true);
     const { wrapper, store } = mountWrapper(null);
-    const nativeLogin = vi.spyOn(store, 'loginWithNativeGoogle').mockResolvedValue(true);
+    const nativeLogin = vi.spyOn(store, 'loginWithNativeGoogle').mockResolvedValue('SUCCESS');
     await flushPromises();
 
     const loginButtons = wrapper.findAllComponents({ name: 'Button' }).filter(b => b.text().includes('Anmelden'));
@@ -87,13 +95,14 @@ describe('TopbarUserActions.vue', () => {
 
     expect(nativeLogin).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith({ path: '/', force: true });
+    expect(toastMocks.error).not.toHaveBeenCalled();
     platformMocks.shouldUseNativeLogin.mockReturnValue(false);
   });
 
-  it('does not navigate when native Google login fails', async () => {
+  it('neither navigates nor shows a message when the user cancels the native login', async () => {
     platformMocks.shouldUseNativeLogin.mockReturnValue(true);
     const { wrapper, store } = mountWrapper(null);
-    vi.spyOn(store, 'loginWithNativeGoogle').mockResolvedValue(false);
+    vi.spyOn(store, 'loginWithNativeGoogle').mockResolvedValue('CANCELLED');
     await flushPromises();
 
     const loginButton = wrapper.findAllComponents({ name: 'Button' }).find(b => b.text().includes('Anmelden'));
@@ -101,8 +110,28 @@ describe('TopbarUserActions.vue', () => {
     await flushPromises();
 
     expect(mockPush).not.toHaveBeenCalled();
+    expect(toastMocks.error).not.toHaveBeenCalled();
     platformMocks.shouldUseNativeLogin.mockReturnValue(false);
   });
+
+  it.each(['NO_ACCOUNT', 'BACKEND_ERROR', 'NOT_CONFIGURED', 'FAILED'] as const)(
+    'shows an error message and does not navigate when native login fails with %s',
+    async (result) => {
+      platformMocks.shouldUseNativeLogin.mockReturnValue(true);
+      const { wrapper, store } = mountWrapper(null);
+      vi.spyOn(store, 'loginWithNativeGoogle').mockResolvedValue(result);
+      await flushPromises();
+
+      const loginButton = wrapper.findAllComponents({ name: 'Button' }).find(b => b.text().includes('Anmelden'));
+      await loginButton?.trigger('click');
+      await flushPromises();
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(toastMocks.error).toHaveBeenCalledTimes(1);
+      expect(toastMocks.error.mock.calls[0]![0]).not.toContain('nativeLogin.error');
+      platformMocks.shouldUseNativeLogin.mockReturnValue(false);
+    },
+  );
 
   it('calls login when login button clicked', async () => {
     const { wrapper } = mountWrapper(null);

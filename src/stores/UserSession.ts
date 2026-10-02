@@ -8,6 +8,26 @@ import { nativeGoogleAuthService } from '@/services/NativeGoogleAuth';
 
 export type User = UserJson;
 
+/**
+ * Outcome of a native Google login, so that the UI can react differently:
+ * CANCELLED is a deliberate user action (no message), all other failures are shown to the user.
+ */
+export type NativeLoginResult =
+  | 'SUCCESS'
+  | 'CANCELLED'
+  | 'NO_ACCOUNT'
+  | 'BACKEND_ERROR'
+  | 'NOT_CONFIGURED'
+  | 'FAILED';
+
+/** Maps the error code of the native plugin (see NativeGoogleAuthPlugin.java) to a login result. */
+function toNativeLoginResult(error: unknown): NativeLoginResult {
+  const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
+  if (code === 'CANCELLED') return 'CANCELLED';
+  if (code === 'NO_CREDENTIAL') return 'NO_ACCOUNT';
+  return 'FAILED';
+}
+
 export const useUserSessionStore = defineStore('user-session', {
   state: () => ({ user: null as User | null, sessionInitialized: false }),
 
@@ -66,21 +86,30 @@ export const useUserSessionStore = defineStore('user-session', {
 
     /**
      * Native Google login (Capacitor app): asks the operating system for a Google ID token
-     * and exchanges it at the backend. Returns true if a session was established.
+     * and exchanges it at the backend. Returns 'SUCCESS' if a session was established,
+     * otherwise the reason of the failure.
      */
-    async loginWithNativeGoogle(): Promise<boolean> {
+    async loginWithNativeGoogle(): Promise<NativeLoginResult> {
       const serverClientId = nativeGoogleAuthService.getServerClientId();
       if (!serverClientId) {
         console.error('Native Google login not configured: VITE_GOOGLE_WEB_CLIENT_ID is missing');
-        return false;
+        return 'NOT_CONFIGURED';
       }
+
+      let idToken: string;
       try {
-        const { idToken } = await nativeGoogleAuthService.signIn(serverClientId);
-        await this.loginWithToken(idToken);
-        return true;
+        ({ idToken } = await nativeGoogleAuthService.signIn(serverClientId));
       } catch (error: unknown) {
         console.error('Native Google login failed:', error);
-        return false;
+        return toNativeLoginResult(error);
+      }
+
+      try {
+        await this.loginWithToken(idToken);
+        return 'SUCCESS';
+      } catch {
+        // already logged by loginWithToken (backend rejected the token or is not reachable)
+        return 'BACKEND_ERROR';
       }
     },
   },

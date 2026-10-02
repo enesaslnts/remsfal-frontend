@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat;
 import androidx.credentials.Credential;
 import androidx.credentials.CredentialManager;
 import androidx.credentials.CredentialManagerCallback;
+import androidx.credentials.CredentialOption;
 import androidx.credentials.CustomCredential;
 import androidx.credentials.GetCredentialRequest;
 import androidx.credentials.GetCredentialResponse;
@@ -21,6 +22,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 /**
@@ -29,6 +31,11 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
  * already registered on the device - without a browser redirect.
  *
  * JavaScript: NativeGoogleAuth.signIn({ serverClientId }) -> { idToken, email, displayName }
+ *
+ * Step 1: bottom sheet with the Google accounts on the device (GetGoogleIdOption).
+ * Step 2 (fallback): if the device has no Google account (NoCredentialException), the
+ * "Sign in with Google" flow (GetSignInWithGoogleOption) is started, which lets the user
+ * add a Google account (e-mail, password, possibly 2FA - handled entirely by Google).
  *
  * The serverClientId is the OAuth client ID of the REMSFAL backend (web client).
  * Google issues the ID token for this audience; the Android OAuth client
@@ -54,8 +61,19 @@ public class NativeGoogleAuthPlugin extends Plugin {
             .setAutoSelectEnabled(false)
             .build();
 
+        requestCredential(call, googleIdOption, serverClientId, true);
+    }
+
+    /**
+     * Requests a Google ID token credential with the given option.
+     *
+     * @param fallbackToSignInWithGoogle if true and no Google account is available on the device,
+     *                                   the "Sign in with Google" flow is started as a second attempt
+     */
+    private void requestCredential(PluginCall call, CredentialOption option, String serverClientId,
+                                   boolean fallbackToSignInWithGoogle) {
         final GetCredentialRequest request = new GetCredentialRequest.Builder()
-            .addCredentialOption(googleIdOption)
+            .addCredentialOption(option)
             .build();
 
         final CredentialManager credentialManager = CredentialManager.create(getContext());
@@ -75,6 +93,11 @@ public class NativeGoogleAuthPlugin extends Plugin {
                     Log.w(TAG, "Google sign-in failed: " + e.getType(), e);
                     if (e instanceof GetCredentialCancellationException) {
                         call.reject("Sign-in cancelled by user", "CANCELLED", e);
+                    } else if (e instanceof NoCredentialException && fallbackToSignInWithGoogle) {
+                        Log.i(TAG, "No Google account on device - falling back to Sign in with Google");
+                        final GetSignInWithGoogleOption signInWithGoogleOption =
+                            new GetSignInWithGoogleOption.Builder(serverClientId).build();
+                        requestCredential(call, signInWithGoogleOption, serverClientId, false);
                     } else if (e instanceof NoCredentialException) {
                         call.reject("No Google account available on this device", "NO_CREDENTIAL", e);
                     } else {

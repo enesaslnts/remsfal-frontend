@@ -187,37 +187,57 @@ describe('UserSession Store', () => {
 
       const result = await store.loginWithNativeGoogle();
 
-      expect(result).toBe(true);
+      expect(result).toBe('SUCCESS');
       expect(signIn).toHaveBeenCalledWith(CLIENT_ID);
       const body = vi.mocked(globalThis.fetch).mock.calls[0]![1]?.body as URLSearchParams;
       expect(body.get('app_id')).toBe('google');
       expect(body.get('app_token')).toBe('native-id-token');
     });
 
-    it('should return false if the user cancels the native dialog', async () => {
-      signIn.mockRejectedValue(new Error('Sign-in cancelled'));
+    it('should return CANCELLED if the user cancels the native dialog', async () => {
+      signIn.mockRejectedValue(Object.assign(new Error('Sign-in cancelled by user'), { code: 'CANCELLED' }));
 
       const result = await store.loginWithNativeGoogle();
 
-      expect(result).toBe(false);
+      expect(result).toBe('CANCELLED');
       expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    it('should return false if the backend rejects the token', async () => {
+    it('should return NO_ACCOUNT if no Google account is available on the device', async () => {
+      signIn.mockRejectedValue(
+        Object.assign(new Error('No Google account available on this device'), { code: 'NO_CREDENTIAL' }),
+      );
+
+      const result = await store.loginWithNativeGoogle();
+
+      expect(result).toBe('NO_ACCOUNT');
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('should return FAILED for other native errors', async () => {
+      signIn.mockRejectedValue(new Error('Google sign-in failed'));
+
+      const result = await store.loginWithNativeGoogle();
+
+      expect(result).toBe('FAILED');
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('should return BACKEND_ERROR if the backend rejects the token', async () => {
       signIn.mockResolvedValue({ idToken: 'foreign-token' });
       vi.mocked(globalThis.fetch).mockResolvedValue({ ok: false, status: 401 } as Response);
 
       const result = await store.loginWithNativeGoogle();
 
-      expect(result).toBe(false);
+      expect(result).toBe('BACKEND_ERROR');
     });
 
-    it('should return false if no server client id is configured', async () => {
+    it('should return NOT_CONFIGURED if no server client id is configured', async () => {
       vi.mocked(nativeGoogleAuthService.getServerClientId).mockReturnValue('');
 
       const result = await store.loginWithNativeGoogle();
 
-      expect(result).toBe(false);
+      expect(result).toBe('NOT_CONFIGURED');
       expect(signIn).not.toHaveBeenCalled();
     });
   });
