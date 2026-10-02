@@ -86,7 +86,7 @@ describe('TopbarUserActions.vue', () => {
     await flushPromises();
 
     expect(nativeLogin).toHaveBeenCalledTimes(1);
-    expect(mockPush).toHaveBeenCalledWith('/');
+    expect(mockPush).toHaveBeenCalledWith({ path: '/', force: true });
     platformMocks.shouldUseNativeLogin.mockReturnValue(false);
   });
 

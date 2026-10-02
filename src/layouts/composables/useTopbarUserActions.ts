@@ -41,8 +41,11 @@ export function useTopbarUserActions(): {
   const loginNative = async () => {
     const success = await sessionStore.loginWithNativeGoogle();
     if (success) {
+      // force: the app usually is already on '/', a plain push would be a no-op.
+      // Forcing the navigation runs the router guards, which send logged-in users
+      // to their role-specific start page (same behaviour as after the web login).
       const redirect = route.query.redirect as string | undefined;
-      router.push(redirect || '/');
+      router.push({ path: redirect || '/', force: true });
     }
   };
 
